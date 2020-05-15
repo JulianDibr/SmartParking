@@ -1,7 +1,14 @@
 #include <WiFi.h>
+#include <HTTPClient.h>
 
+HTTPClient http;
+  
 const char* ssid = "WLAN1996";
 const char* password = "Julian1996";
+
+const char host = "http://192.168.2.107/api/sendStatus";
+//const char updateStatusURL = "/sendStatus";
+//const char getSettingsURL = "";
 
 const int echoPin = 34                                                                                                                                                                            ;
 const int trigPin = 27;
@@ -9,8 +16,6 @@ const int redLed = 25;
 const int greenLed = 26;
 
 const int deviceID = 1;
-//const char updateStatusURL = "";
-//const char getSettingsURL = "";
 
 long duration;
 int distance;
@@ -50,7 +55,7 @@ void loop() {
   Serial.println("cm");
 
   checkForStatusUpdate(distance);
-  delay(500);
+  delay(2000);
 }
 
 void checkForStatusUpdate (int distance) {
@@ -70,5 +75,16 @@ void checkForStatusUpdate (int distance) {
 
 void sendStatusToApi (int spaceOccupied) {
   //0 = no => Not Occupied; 1 = yes => Occupied
+  postData =  "status=" + spaceOccupied + "&device_id=" + deviceID;
+  http.begin(host);
+  Serial.println(host);
+  
+  http.addHeader("Content_Type", "application/x-www-form-urlencoded");
+  int httpCode = http.POST(postData);
+  String payload = http.getString();
 
+  Serial.println(httpCode);
+  Serial.println(payload);
+
+  http.end();
 }
