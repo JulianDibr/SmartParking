@@ -1,22 +1,25 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+StaticJsonBuffer<200> jsonBuffer;
 
 const char* ssid = "";
 const char* password = "";
 
-const char* host = "http://192.168.178.60/api/sendStatus";
-//const char updateStatusURL = "/sendStatus";
-//const char getSettingsURL = "";
+const char* sendStatusURL = "http://192.168.178.60/api/sendStatus";
+const char* getSettingsURL = "http://192.168.178.60/api/getSettings";
 
-const int echoPin = 34                                                                                                                                                                            ;
-const int trigPin = 27;
-const int redLed = 25;
-const int greenLed = 26;
+const short echoPin = 34                                                                                                                                                                            ;
+const short trigPin = 27;
+const short redLed = 25;
+const short greenLed = 26;
+int maxDistance = 0;
 
 const String deviceID = "2";
 
 long duration;
-int distance;
+short distance;
 
 void setup() {
   //Sensor Pins
@@ -36,6 +39,10 @@ void setup() {
     Serial.println("Connecting to WiFi..");
   }
   Serial.println("Connected to the WiFi network");
+
+  JsonObject& data = getSettingsFromApi();
+  maxDistance = data["meassure_distance"];
+  Serial.println(maxDistance);
 }
 
 void loop() {
@@ -53,12 +60,12 @@ void loop() {
   Serial.println("cm");
 
   checkForStatusUpdate(distance);
-  delay(7000);
+  delay(1000);
 }
 
 void checkForStatusUpdate (int distance) {
   if (distance < 2000) {
-    if (distance < 30) {
+    if (distance < maxDistance) {
       digitalWrite(redLed, LOW);
       digitalWrite(greenLed, HIGH);
       sendStatusToApi(1);
@@ -78,14 +85,26 @@ void sendStatusToApi (int spaceOccupied) {
   
   //0 = no => Not Occupied; 1 = yes => Occupied
   postData =  "status=" + status + "&device_id=" + deviceID;
-  http.begin(host);
+  http.begin(sendStatusURL);
   
-http.addHeader("Content-Type", "application/x-www-form-urlencoded");  ^     ^^^       
-  int httpCode = http.POST(postData);
+http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  http.POST(postData);
   String payload = http.getString();
 
-  Serial.println(httpCode);
-  Serial.println(payload);
+  http.end();
+}
+
+JsonObject& getSettingsFromApi () {
+  HTTPClient http;
+  
+  http.begin(getSettingsURL);
+  
+  http.GET();
+  String payload = http.getString();
+  JsonObject& data = jsonBuffer.parseObject(payload);
 
   http.end();
+  Serial.println(payload);
+
+  return data;
 }
