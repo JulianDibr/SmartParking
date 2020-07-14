@@ -4,24 +4,20 @@
 
 StaticJsonDocument<200> doc;
 StaticJsonDocument<200> doc1;
+
 const char* ssid = "";
 const char* password = "";
 
-IPAddress local_IP(192, 168, 178, 111);
-IPAddress gateway(192, 168, 178, 1);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress dns(8, 8, 8, 8); // Google DNS
-
-const char* sendStatusURL = "http://192.168.178.60/api/sendStatus";
-const char* getSettingsURL = "http://192.168.178.60/api/getSettings";
+const char* sendStatusURL = "http://192.168.2.107/api/sendStatus";
+const char* getSettingsURL = "http://192.168.2.107/api/getSettings";
 
 const short echoPin = 34                                                                                                                                                                            ;
 const short trigPin = 27;
 const short redLed = 25;
 const short greenLed = 26;
-int maxDistance = 0;
+int maxDistance = 30; //Def Wert für Messgrenze
 
-const String deviceID = "1";
+const String deviceID = "1"; //ID des Geräts = device_id in DB-Tabelle (parking_spaces)
 
 long duration;
 short distance;
@@ -36,19 +32,24 @@ void setup() {
 
   Serial.begin(115200); //Serieller Monitorausgabe starten
 
-  //WIFI
+  //Verbindung zum WLAN Netzwerk
   WiFi.begin(ssid, password);
-  WiFi.config(local_IP, gateway, subnet, dns);
-  
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.println("Connecting to WiFi..");
+    Serial.println("Verbindung zum WLAN wird hergestellt");
   }
-  Serial.println("Connected to the WiFi network");
-
-  getSettingsFromApi();
-  maxDistance = doc1["meassure_distance"];
-  Serial.print("max: ");
+  Serial.print("Mit ");
+  Serial.print(ssid);
+  Serial.print(" verbunden");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+  
+  getSettingsFromApi(); //Laden der Settings über die API
+  
+  maxDistance = doc1["meassure_distance"]; //Distanz auf eingestellten Wert setzen
+  
+  Serial.print("Max Distance: ");
   Serial.println(maxDistance);
 }
 
@@ -62,16 +63,16 @@ void loop() {
   duration = pulseIn(echoPin, HIGH);
   //Convert and output Sensor data in cm
   distance = duration * 0.03434 / 2;
-  Serial.print("Distance: ");
+  Serial.print("Distanz: ");
   Serial.print(distance);
   Serial.println("cm");
 
-  checkForStatusUpdate(distance);
-  delay(2000);
+  statusUpdate(distance); //Übermitteln des neuen Status
+  delay(1500);
 }
 
-void checkForStatusUpdate (int distance) {
-  if (distance < 2000) {
+void statusUpdate (int distance) {
+  if (distance < 2000) { //Filtern von unplausiblen Werten
     if (distance < maxDistance) {
       digitalWrite(redLed, LOW);
       digitalWrite(greenLed, HIGH);
@@ -86,33 +87,38 @@ void checkForStatusUpdate (int distance) {
 }
 
 void sendStatusToApi (int spaceOccupied) {
+  //Neuen Status an API übermitteln
   HTTPClient http;
   String postData;
-  String status = String(spaceOccupied);
-  
+  String status = String(spaceOccupied); //Status des Geräts
+
   //0 = no => Not Occupied; 1 = yes => Occupied
-  postData =  "status=" + status + "&device_id=" + deviceID;
-  http.begin(sendStatusURL);
+  postData =  "status=" + status + "&device_id=" + deviceID; //Formulardaten generieren
   
+  http.begin(sendStatusURL); //Verbindung zur URL aufbauen
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  http.POST(postData);
-  String payload = http.getString();
+  http.POST(postData); //Übermitteln des Formulars
+  
+  String payload = http.getString(); //Antwort der API speichern und ausgeben
   Serial.println(payload);
 
-  http.end();
+  http.end(); //Verbindung schließen
 }
 
 void getSettingsFromApi () {
-  Serial.println("in api");
+  Serial.print("Getting Settings from: ");
+  Serial.println(getSettingsURL);
+  
   HTTPClient http;
-  
-  http.begin(getSettingsURL);
-  
+  http.begin(getSettingsURL); //Anfrage an API stellen
   http.GET();
-  String json = http.getString();
+  
+  String json = http.getString(); //Erhaltenes JSON speichern
+  Serial.print("Setting JSON: ");
   Serial.println(json);
+
+  int httpCode = http.GET();
   http.end();
 
-  
-  deserializeJson(doc1, json);
+  deserializeJson(doc1, json); //JSON decodieren
 }
