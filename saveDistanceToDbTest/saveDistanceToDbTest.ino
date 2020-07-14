@@ -2,10 +2,15 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-StaticJsonBuffer<200> jsonBuffer;
-
+StaticJsonDocument<200> doc;
+StaticJsonDocument<200> doc1;
 const char* ssid = "";
 const char* password = "";
+
+IPAddress local_IP(192, 168, 178, 111);
+IPAddress gateway(192, 168, 178, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress dns(8, 8, 8, 8); // Google DNS
 
 const char* sendStatusURL = "http://192.168.178.60/api/sendStatus";
 const char* getSettingsURL = "http://192.168.178.60/api/getSettings";
@@ -16,7 +21,7 @@ const short redLed = 25;
 const short greenLed = 26;
 int maxDistance = 0;
 
-const String deviceID = "2";
+const String deviceID = "1";
 
 long duration;
 short distance;
@@ -33,15 +38,17 @@ void setup() {
 
   //WIFI
   WiFi.begin(ssid, password);
-
+  WiFi.config(local_IP, gateway, subnet, dns);
+  
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.println("Connecting to WiFi..");
   }
   Serial.println("Connected to the WiFi network");
 
-  JsonObject& data = getSettingsFromApi();
-  maxDistance = data["meassure_distance"];
+  getSettingsFromApi();
+  maxDistance = doc1["meassure_distance"];
+  Serial.print("max: ");
   Serial.println(maxDistance);
 }
 
@@ -60,7 +67,7 @@ void loop() {
   Serial.println("cm");
 
   checkForStatusUpdate(distance);
-  delay(1000);
+  delay(2000);
 }
 
 void checkForStatusUpdate (int distance) {
@@ -87,24 +94,25 @@ void sendStatusToApi (int spaceOccupied) {
   postData =  "status=" + status + "&device_id=" + deviceID;
   http.begin(sendStatusURL);
   
-http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   http.POST(postData);
   String payload = http.getString();
+  Serial.println(payload);
 
   http.end();
 }
 
-JsonObject& getSettingsFromApi () {
+void getSettingsFromApi () {
+  Serial.println("in api");
   HTTPClient http;
   
   http.begin(getSettingsURL);
   
   http.GET();
-  String payload = http.getString();
-  JsonObject& data = jsonBuffer.parseObject(payload);
-
+  String json = http.getString();
+  Serial.println(json);
   http.end();
-  Serial.println(payload);
 
-  return data;
+  
+  deserializeJson(doc1, json);
 }
